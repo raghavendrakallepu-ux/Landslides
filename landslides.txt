@@ -1,0 +1,105 @@
+#define BLYNK_TEMPLATE_ID "TMPL3TF_QHdya"
+#define BLYNK_TEMPLATE_NAME "Land Slide Auto Detection"
+#define BLYNK_AUTH_TOKEN "bIGu32UD8QFULGGxhdMcrWYpMeVPzAFE"
+
+#include <DHT.h>
+#include <BlynkSimpleEsp8266.h>
+#include <ESP8266WiFi.h>
+
+// --- WiFi Credentials ---
+char ssid[] = "landslide";
+char pass[] = "landslide";
+
+// --- Pin Definitions ---
+#define DHTPIN D2               // GPIO4
+#define DHTTYPE DHT22
+#define SOIL_MOISTURE_PIN A0    // Analog pin
+#define TILT_PIN D4             // GPIO14
+#define BUZZER_PIN D5           // GPIO5
+#define LED_PIN D6              // GPIO12
+
+// --- Virtual Pin Definitions for Blynk ---
+#define VPIN_TEMP V0
+#define VPIN_HUMIDITY V1
+#define VPIN_SOIL_MOISTURE V2   // <<< ADDED FOR SOIL MOISTURE
+
+// --- Sensor Initialization ---
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+
+  // Start Blynk connection
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  // Initialize sensors
+  dht.begin();
+  pinMode(TILT_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  digitalWrite(BUZZER_PIN, LOW);
+  digitalWrite(LED_PIN, LOW);
+
+  Serial.println("System Initialized: DHT22, Soil Moisture, Tilt Sensor, Buzzer, LED");
+}
+
+void loop() {
+  Blynk.run();  // Required for Blynk to work
+
+  // --- Read DHT22 Sensor ---
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature(); // Celsius
+
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT sensor!");
+  } else {
+    Serial.print("Temperature: ");
+    Serial.print(temperature);
+    Serial.print(" °C, Humidity: ");
+    Serial.print(humidity);
+    Serial.println(" %");
+
+    // --- Send to Blynk Cloud ---
+    Blynk.virtualWrite(VPIN_TEMP, temperature);
+    Blynk.virtualWrite(VPIN_HUMIDITY, humidity);
+  }
+
+  // --- Read Soil Moisture Sensor ---
+  int moistureValue = analogRead(SOIL_MOISTURE_PIN);
+  Serial.print("Soil Moisture Value: ");
+  Serial.println(moistureValue);
+
+  // --- Send Soil Moisture to Blynk ---
+  Blynk.virtualWrite(VPIN_SOIL_MOISTURE, moistureValue);  // <<< ADDED THIS LINE
+
+  if (moistureValue > 800) {
+    Serial.println("Soil Status: Dry");
+  } else if (moistureValue > 400) {
+    Serial.println("Soil Status: Moist");
+  } else {
+    Serial.println("Soil Status: Wet");
+  }
+
+  // --- LED Control Based on Soil Moisture ---
+  if (moistureValue < 850) {
+    digitalWrite(LED_PIN, HIGH);  // Turn ON LED
+    Serial.println("Moisture Low - LED ON");
+  } else if (moistureValue > 850) {
+    digitalWrite(LED_PIN, LOW);   // Turn OFF LED
+    Serial.println("Moisture Sufficient - LED OFF");
+  }
+
+  // --- Read Tilt Sensor ---
+  int tiltState = digitalRead(TILT_PIN);
+  if (tiltState == LOW) {
+    Serial.println("Tilt Detected!");
+    digitalWrite(BUZZER_PIN, HIGH);  // Turn buzzer ON
+  } else {
+    Serial.println("Stable Position");
+    digitalWrite(BUZZER_PIN, LOW);   // Turn buzzer OFF
+  }
+
+  Serial.println("-----------------------------");
+  delay(3000);  // Delay between readings
+}
